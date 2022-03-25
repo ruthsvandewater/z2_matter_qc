@@ -6,3 +6,5 @@ The main/modules folder presently contains code for the Z2 gates and building ci
 The main/inputs folder will contain yaml files with simulation parameters for different runs.
 
 The main/json folder will contain each run's info, input, and output json files.
+
+The remaining folders are for literature (currently empty) and code development and testing.
