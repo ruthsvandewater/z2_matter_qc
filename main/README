@@ -1,4 +1,0 @@
-# z2_matter_qc/main
-The Jupyter notebook Z2_Simulation_Main-03.24.22.ipynb runs the latest version of the simulation. This notebook will eventually be ported to a python script that will be run through the command line.
-
-The main program gets simulation inputs from a yaml files in the inputs folder, uses functions defined in the python scripts in the modules folder, and saves the input, and output json files to the json folder. 
