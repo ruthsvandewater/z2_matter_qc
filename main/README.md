@@ -5,5 +5,5 @@ This notebook will eventually be ported to a python script that will be run thro
 The bash/zsh script that automatically submits multiple jobs (to be written) will also live here. 
 
 The main program gets simulation inputs from `yaml` files in the inputs folder,
-uses functions defined in the python scripts in the modules folder,
+uses functions defined in the `python` scripts in the modules folder,
 and saves the input, and output `json` files to the json folder. 
