@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 Created on Tue Mar 15 15:06:12 2022
-Last edited on Thu Mar 24 2022
+Last edited on Thu Mar 26 2022
 
 @authors: Erik Gustafson, Elizabeth Hardt, Norman Hogan,
           Henry Lamm, Ruth Van de Water, Mike Wagman
@@ -17,7 +17,7 @@ from qiskit import QuantumCircuit
 from qiskit.quantum_info import Operator as Operator
 
 
-def trotter_evolution(nsites: int, epsilon: float, mass: float,
+def trotter_evolution(num_sites: int, epsilon: float, mass: float,
                       ntrotter: int, twirl=False, qsim=True,
                       richardson_level: int=1, state_prep=True):
     """
@@ -25,7 +25,7 @@ def trotter_evolution(nsites: int, epsilon: float, mass: float,
     simulations that we want to do for the Z2 gauge with staggered matter
     in (1+1)D. These simulations allow for including and excluding randomized
     compiling (pauli twirling) and richardson extrapolations.
-
+    
     Parameters
     ----------
     nsites : int
@@ -49,25 +49,30 @@ def trotter_evolution(nsites: int, epsilon: float, mass: float,
         # N_CNOTS = richardson_level * 2 - 1
     state_prep : boolean, (optional)
         whether to use a state prep circuit or not. Default is True
-
+        
     Returns
     ----------
     qc : qiskit.QuantumCircuit
         the quantum circuit that will be simulated
     """
-    
+
     # get number of qubits from number of sites
     nqubits = 2 * nsites - 1
     
     # create a quantum circuit
     qc = QuantumCircuit(nqubits, nqubits)
-    
-    # prepare state if desired
-    if (state_prep):
-        qc.h([2 * i + 1 for i in range(nsites - 1)])
+
+    ###############################################################
+    # prepare initial state -- eventually move to separate function
+    ###############################################################
+    # Hademard operator on gauge links puts photon qubits in + state of x basis 
+    # (recall that H|0> = |+>)
+    # needed for gauge invariance? Vacuum quantum numbers? Something else???
+    if state_prep:
+        qc.h([2 * i + 1 for i in range(num_sites - 1)])
 
     # build quantum circuit for running on a quantum computer
-    # use different layouts for 2 sites (3 qubits) and 4 sites (7 qubits)
+    # using different layouts for 2 sites (3 qubits) and 4 sites (7 qubits)
     if (qsim):
         if nsites == 2:
             if state_prep:
@@ -82,8 +87,8 @@ def trotter_evolution(nsites: int, epsilon: float, mass: float,
             qc = trotter_evolution_4sites(qc, epsilon, mass, ntrotter,
                                           twirl=twirl, richardson_level=richardson_level)
         else:
-            exception_str = "Only 2 and 4 site simulations are"
-            exception_str += "allowed on IBM quantum hardware."
+            exception_str = "For quantum hardware,"
+            exception_str += "only 2- and 4-site simulation code is available."
             raise Exception(exception_str)
             
     # build quantum circuit for running on a simulator backend
@@ -97,10 +102,7 @@ def trotter_evolution(nsites: int, epsilon: float, mass: float,
 
     return qc
 
-#############################################################################
-############### Erik will add save_state_vector functionality ###############
-#################### Also, ntrotter isn't currently used  ###################
-#############################################################################
+
 def trotter_evolution_generic(qc, nsites: int, epsilon: float,
                               mass: float, ntrotter: int, twirl=False,
                               save_state_vector=True):
@@ -132,7 +134,7 @@ def trotter_evolution_generic(qc, nsites: int, epsilon: float,
     twirl : boolean (optional)
         whether to implement this circuit with randomized
         compiling. The default is False.
-    save_state_vector : boolean, optional
+    save_state_vector : boolean (optional)
         save the statevectors of the simulation. This is good if we want to
         minimize the computing time. The default is True.
         
@@ -141,27 +143,32 @@ def trotter_evolution_generic(qc, nsites: int, epsilon: float,
     qc : qiskit.QuantumCircuit
         quantum circuit object after the gates have been applied
     """
-    
-    # apply the rotations corresponding to the mass operators
-    qc = Z2gates.apply_mass_terms(qc, nsites, mass, epsilon)
-    
-    # apply the rotations corresponding to the gauge dynamics operators
-    qc = Z2gates.apply_gauge_terms(qc, nsites, epsilon)
-    
-    # apply the fermion hopping term across the qubits
-    qc = Z2gates.apply_fermion_hopping(qc, nsites, epsilon, eta=1.0, twirl=False)
-    
-    # apply the rotations corresponding to the mass operators
-    qc = Z2gates.apply_mass_terms(qc, nsites, mass, epsilon)
-    
-    # apply the rotations corresponding to the gauge dynamics operators
-    qc = Z2gates.apply_gauge_terms(qc, nsites, epsilon)
 
+    # apply second order Suzuki-Trotter operator ntrotter times
+    for step in range(ntrotter):
+        
+        # apply the rotations corresponding to the mass operators
+        qc = Z2gates.apply_mass_terms(qc, nsites, mass, epsilon)
+
+        # apply the rotations corresponding to the gauge dynamics operators
+        qc = Z2gates.apply_gauge_terms(qc, nsites, epsilon)
+
+        # apply the fermion hopping term across the qubits
+        qc = Z2gates.apply_fermion_hopping(qc, nsites, epsilon, eta=1.0, twirl=False)
+
+        # apply the rotations corresponding to the mass operators
+        qc = Z2gates.apply_mass_terms(qc, nsites, mass, epsilon)
+
+        # apply the rotations corresponding to the gauge dynamics operators
+        qc = Z2gates.apply_gauge_terms(qc, nsites, epsilon)
+        
+        # save the state vector
+        if (save_state_vector):
+            qc.save_statevector(label=str(step))
+        
     return qc
 
-#############################################################################
-###################### ntrotter isn't currently used?  ######################
-#############################################################################
+
 def trotter_evolution_2sites(qc, epsilon: float, mass: float, ntrotter: int,
                              twirl=False, richardson_level=1):
     """
@@ -190,34 +197,35 @@ def trotter_evolution_2sites(qc, epsilon: float, mass: float, ntrotter: int,
     richardson_level : int (optional)
         Determines how many times the CNOT gate is interleaved.
         # N_CNOTS = richardson_level * 2 - 1
-
+        
     Returns
     ----------
     qc : qiskit.QuantumCircuit
         quantum circuit object after the gates have been applied
     """
-    
-    # apply the rotations corresponding to the mass operators
-    qc = Z2gates.apply_mass_terms(qc, 2, mass, epsilon)
-    
-    # apply the rotations corresponding to the gauge dynamics operators
-    qc = Z2gates.apply_gauge_terms(qc, 2, epsilon)
-    
-    # apply the fermion hopping term across the qubits
-    qc = Z2gates.apply_fermion_hopping_2sites(qc, epsilon, eta=1.0,
-                                              twirl=twirl, richardson_level=richardson_level)
-    
-    # apply the rotations corresponding to the mass operators
-    qc = Z2gates.apply_mass_terms(qc, 2, mass, epsilon)
-    
-    # apply the rotations corresponding to the gauge dynamics operators
-    qc = Z2gates.apply_gauge_terms(qc, 2, epsilon)
+
+    # apply the Suzuki-Trotter operator ntrotter times
+    for step in range(ntrotter):
+        
+        # apply the rotations corresponding to the mass operators
+        qc = Z2gates.apply_mass_terms(qc, 2, mass, epsilon)
+
+        # apply the rotations corresponding to the gauge dynamics operators
+        qc = Z2gates.apply_gauge_terms(qc, 2, epsilon)
+
+        # apply the fermion hopping term across the qubits
+        qc = Z2gates.apply_fermion_hopping_2sites(qc, epsilon, eta=1.0,
+                                                  twirl=twirl, richardson_level=richardson_level)
+
+        # apply the rotations corresponding to the mass operators
+        qc = Z2gates.apply_mass_terms(qc, 2, mass, epsilon)
+
+        # apply the rotations corresponding to the gauge dynamics operators
+        qc = Z2gates.apply_gauge_terms(qc, 2, epsilon)
 
     return qc
 
-#############################################################################
-###################### ntrotter isn't currently used?  ######################
-#############################################################################
+
 def trotter_evolution_4sites(qc, epsilon: float, mass: float, ntrotter: int,
                              twirl=False, richardson_level=1):
     """
@@ -246,30 +254,34 @@ def trotter_evolution_4sites(qc, epsilon: float, mass: float, ntrotter: int,
     richardson_level : int (optional)
         Determines how many times the CNOT gate is interleaved.
         # N_CNOTS = richardson_level * 2 - 1
-
+        
     Returns
     ----------
-    qc : TYPE
+    qc : qiskit.QuantumCircuit
         quantum circuit object after the gates have been applied
     """
     
-    # apply the rotations corresponding to the mass operators
-    qc = Z2gates.apply_mass_terms(qc, 4, mass, epsilon)
-    
-    # apply the rotations corresponding to the gauge dynamics operators
-    qc = Z2gates.apply_gauge_terms(qc, 4, epsilon)
-    
-    # apply the fermion hopping term across the qubits
-    qc = Z2gates.apply_fermion_hopping_4sites(qc, epsilon, eta=1.0, twirl=twirl,
-                                              richardson_level=richardson_level)
-    
-    # apply the rotations corresponding to the mass operators
-    qc = Z2gates.apply_mass_terms(qc, 4, mass, epsilon)
-    
-    # apply the rotations corresponding to the gauge dynamics operators
-    qc = Z2gates.apply_gauge_terms(qc, 4, epsilon)
+    # apply the Suzuki-Trotter Operator ntrotter times
+    for step in range(ntrotter):
+        
+        # apply the rotations corresponding to the mass operators
+        qc = Z2gates.apply_mass_terms(qc, 4, mass, epsilon)
+
+        # apply the rotations corresponding to the gauge dynamics operators
+        qc = Z2gates.apply_gauge_terms(qc, 4, epsilon)
+
+        # apply the fermion hopping term across the qubits
+        qc = Z2gates.apply_fermion_hopping_4sites(qc, epsilon, eta=1.0, twirl=twirl,
+                                                  richardson_level=richardson_level)
+
+        # apply the rotations corresponding to the mass operators
+        qc = Z2gates.apply_mass_terms(qc, 4, mass, epsilon)
+
+        # apply the rotations corresponding to the gauge dynamics operators
+        qc = Z2gates.apply_gauge_terms(qc, 4, epsilon)
 
     return qc
+
 
 if __name__ == "__main__":
     x = np.array([[0, 1], [1, 0]])
@@ -307,14 +319,18 @@ if __name__ == "__main__":
     oper = r1q @ oper
     oper = Operator(oper)
     opert = Operator(trotter_evolution_4sites(QuantumCircuit(7), dt, mass, 1))
+    # print(np.array(oper)[:10, :10], np.array(opert)[:10, :10])
     print(oper.equiv(opert))
-    print('=' * 100)
+    print('=' * 20)
     try:
-        trotter_evolution(8, 0.1, 1.0, 1, twirl=False, qsim=True, state_prep=False)
+        trotter_evolution(8, 0.1, 1.0, 1, twirl=False, qsim=True,
+                          state_prep=False)
     except (Exception) as e:
-        print('====' * 25)
+        print('====' * 5)
         print(e)
         print('---')
         print('exception working')
     print('=' * 100)
-    trotter_evolution(8, 0.1, 1.0, 1, twirl=False, qsim=False, state_prep=False)
+    trotter_evolution(8, 0.1, 1.0, 1, twirl=False, qsim=False,
+                      state_prep=False)
+
